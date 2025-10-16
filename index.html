@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fruit Blast — Start</title>
+<style>
+:root{
+    --bg:#094e2b;
+    --lightGreen:#7CFC00
+}
+body{
+    margin:0;
+    height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--bg);
+    color:white;
+    font-family:Inter,system-ui,Arial;
+    text-align:center
+}
+.card{
+    background:linear-gradient(rgba(255,255,255,0.03),rgba(255,255,255,0.02));
+    padding:30px;
+    border-radius:16px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.45);
+    max-width:520px
+}
+h1{
+    margin:0 0 10px;
+    font-size:clamp(26px,5vw,44px)
+}
+p{
+    margin:0 0 16px;
+    opacity:.95
+}
+.controls{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content:center;
+    flex-wrap:wrap
+}
+select{
+    padding:10px;
+    border-radius:10px;
+    border:none;
+    font-weight:700
+}
+.btn{
+    background:var(--lightGreen);
+    color:#0b0b0b;
+    padding:12px 22px;
+    border:none;
+    border-radius:12px;
+    font-weight:800;
+    font-size:16px;
+    cursor:pointer
+}
+.mutetoggle{
+    margin-top:12px;
+    opacity:.95
+}
+footer{
+    margin-top:12px;
+    font-size:13px;
+    color:rgba(255,255,255,0.75)
+    }
+</style>
+</head>
+<body>
+<div class="card">
+<h1>Fruit Blast</h1>
+<p>Realistic fruits, arcade music, combos, high score — blast as many as you can!</p>
+
+
+<div class="controls">
+<select id="timeSelect" title="Select game time">
+<option value="10">10 sec</option>
+<option value="20" selected>20 sec</option>
+<option value="30">30 sec</option>
+</select>
+<select id="modeSelect" title="Select game mode">
+<option value="timed" selected>Timed</option>
+<option value="endless">Endless</option>
+</select>
+<button id="startBtn" class="btn">Start Game</button>
+</div>
+
+
+<div class="mutetoggle">
+<label style="cursor:pointer"><input id="muteOnStart" type="checkbox"/> Mute audio on start</label>
+</div>
+</div>
+
+<script>
+document.getElementById('startBtn').addEventListener('click',()=>{
+const time=document.getElementById('timeSelect').value;
+const mode=document.getElementById('modeSelect').value;
+const mute=document.getElementById('muteOnStart').checked?1:0;
+// navigate, passing params
+window.location.href=`game.html?time=${time}&mode=${mode}&mute=${mute}`;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Fruit Blast — Game</title>
+<style>
+html,body{
+    height:100%;
+    margin:0;
+    font-family:Inter,system-ui,Arial;
+    background:#07120b
+}
+#container{
+    position:relative;
+    height:100vh;
+    overflow:hidden
+}
+canvas{
+    display:block;
+    touch-action:none
+}
+.hud{
+    position:absolute;
+    top:14px;
+    left:14px;
+    padding:8px 12px;
+    background:rgba(255,255,255,0.06);
+    -webkit-backdrop-filter:blur(6px);/* Safari/ios support */
+    backdrop-filter:blur(6px);/* Standard support */
+    border-radius:12px;
+    color:white;
+    font-weight:800}
+.hud.right{
+    left:auto;
+    right:14px;
+}
+.controls{
+    position:absolute;
+    top:14px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:8px
+}
+.smallbtn{
+    background:rgba(255,255,255,0.08);
+    border:0;
+    padding:8px 10px;
+    border-radius:10px;
+    color:white;
+    cursor:pointer;
+    font-weight:700
+}
+#muteBtn{
+    position:absolute;
+    top:55px;
+    right:86px;
+}
+#pauseBtn{
+    position:absolute;
+    top:55px;
+    right:14px;
+}
+#overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:none
+}
+.screen
+{pointer-events:auto;
+    background:rgba(0,0,0,0.5);
+    padding:18px;
+    border-radius:14px;
+    color:white;
+    text-align:center
+}
+.scorePop{
+    position:absolute;
+    font-weight:900;
+    color:#fff;
+    text-shadow:0 4px 12px rgba(0,0,0,0.6);
+    }
+</style>
+</head>
+<body>
+<div id="container">
+<canvas id="gameCanvas"></canvas>
+<div id="scoreHud" class="hud">Blasted: <span id="score">0</span></div>
+<div id="timerHud" class="hud right">Time: <span id="timer">0</span>s</div>
+<div class="controls">
+<button id="homeBtn" class="smallbtn">Home</button>
+</div>
+<button id="muteBtn" class="smallbtn">Mute</button>
+<button id="pauseBtn" class="smallbtn">Pause</button>
+
+
+<div id="overlay" style="display:none;">
+<div class="screen" id="gameOverBox" style="display:none;min-width:260px">
+<h2 id="goTitle">Game Over</h2>
+<p style="font-size:22px;margin:6px 0">Score: <span id="finalScore">0</span></p>
+<p id="bestText" style="opacity:.9;margin:6px 0">Best: <span id="bestScore">0</span></p>
+<div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+<button id="playAgain" onclick="window.location.reload();">Play Again</button>
+<button id="gotoHome" class="smallbtn">Home</button>
+</div>
+</div>
+<div class="screen" id="countdownBox" style="display:none;min-width:160px">
+<div id="cdText" style="font-size:44px;font-weight:900">3</div>
+<div style="opacity:.9">Get Ready</div>
+</div>
+</div>
+</div>
+
+
+<script>
+// Fruit Blast v2.0 — single-file game logic (game.html)
+(() => {
+// --- Parameters & assets (SVG fruit data URLs for realistic look) ---
+const SVG_FRUITS = {
+apple: `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><defs><radialGradient id='g' cx='35%' cy='30%'><stop offset='0' stop-color='#ff7b7b'/><stop offset='1' stop-color='#e32f2f'/></radialGradient></defs><circle cx='80' cy='80' r='64' fill='url(#g)' stroke='#a11' stroke-width='4'/><path d='M76 30c-4 10-2 20 8 22 6 1 12-3 18-8 2-2 6-2 8 0 2 2 2 6 0 8-8 8-18 14-30 14-18 0-34-12-40-28-2-6 6-12 12-12 6 0 6 2 14 4z' fill='#3b2d11' opacity='0.9'/></svg>`,
+orange: `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><defs><radialGradient id='o' cx='35%' cy='25%'><stop offset='0' stop-color='#ffd19a'/><stop offset='1' stop-color='#ff7a00'/></radialGradient></defs><circle cx='80' cy='80' r='64' fill='url(#o)' stroke='#c25a00' stroke-width='4'/><g opacity='0.12' fill='#fff'><circle cx='60' cy='60' r='8'/><circle cx='100' cy='45' r='6'/></g></svg>`,
+banana: `<svg xmlns='http://www.w3.org/2000/svg' width='220' height='120' viewBox='0 0 220 120'><defs><linearGradient id='b' x1='0' x2='1'><stop offset='0' stop-color='#fff59a'/><stop offset='1' stop-color='#ffd54f'/></linearGradient></defs><path d='M10 80c40-60 140-80 200-50' stroke='#f7b500' stroke-width='26' stroke-linecap='round' fill='none'/><path d='M12 80c40-60 140-80 198-52' stroke='url(#b)' stroke-width='20' stroke-linecap='round' fill='none'/></svg>`,
+strawberry: `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='160' viewBox='0 0 140 160'><defs><radialGradient id='s' cx='25%' cy='20%'><stop offset='0' stop-color='#ff9aa2'/><stop offset='1' stop-color='#e73a4a'/></radialGradient></defs><path d='M70 20c30 0 48 32 48 60 0 40-40 68-48 68s-48-28-48-68c0-28 18-60 48-60z' fill='url(#s)' stroke='#b2282e' stroke-width='3'/><g fill='#ffecb3' opacity='0.85'><circle cx='90' cy='90' r='3'/><circle cx='75' cy='110' r='3'/></g></svg>`,
+grape: `<svg xmlns='http://www.w3.org/2000/svg' width='140' height='160' viewBox='0 0 140 160'><defs><radialGradient id='gr' cx='30%' cy='20%'><stop offset='0' stop-color='#d9b3ff'/><stop offset='1' stop-color='#7b2fff'/></radialGradient></defs><g transform='translate(10,0)'><circle cx='40' cy='40' r='18' fill='url(#gr)'/><circle cx='60' cy='60' r='18' fill='url(#gr)'/><circle cx='30' cy='70' r='18' fill='url(#gr)'/><circle cx='55' cy='30' r='18' fill='url(#gr)'/></g></svg>`,
+mango: `<svg xmlns='http://www.w3.org/2000/svg' width='160' height='140' viewBox='0 0 160 140'><defs><linearGradient id='m' x1='0' x2='1'><stop offset='0' stop-color='#ffd27a'/><stop offset='1' stop-color='#ff7b2d'/></linearGradient></defs><path d='M30 50c20-40 90-40 100 10 8 38-30 70-60 72-34 2-46-32-40-60z' fill='url(#m)' stroke='#c65d1f' stroke-width='3'/></svg>`,
+watermelon: `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='120' viewBox='0 0 200 120'><defs><linearGradient id='w' x1='0' x2='1'><stop offset='0' stop-color='#ff8a8a'/><stop offset='1' stop-color='#ff3b3b'/></linearGradient></defs><path d='M10 80a90 90 0 0 1 180 0z' fill='url(#w)' stroke='#b41e1e' stroke-width='4'/><path d='M10 80a120 120 0 0 1 180 0z' fill='#4fbf62' opacity='0.25'/></svg>`
+};
+
+
+// Convert SVG strings to data URLs and preload as images
+const FRUIT_TYPES = Object.keys(SVG_FRUITS);
+const fruitImages = {};
+for(const k of FRUIT_TYPES){ fruitImages[k] = new Image(); fruitImages[k].src = 'data:image/svg+xml;utf8,'+encodeURIComponent(SVG_FRUITS[k]); }
+
+
+// --- WebAudio: arcade background and sounds (synthesized) ---
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = AudioCtx ? new AudioCtx() : null;
+let masterGain, musicGain;
+if(audioCtx){ masterGain = audioCtx.createGain(); musicGain = audioCtx.createGain(); masterGain.connect(audioCtx.destination); musicGain.connect(masterGain); masterGain.gain.value = 0.9; musicGain.gain.value = 0.6; }
+
+
+function playBlastSound(){ 
+    if(!audioCtx) return;
+     const g=audioCtx.createGain(); 
+     const o=audioCtx.createOscillator();
+      o.type='square';
+      o.frequency.value = 900 + Math.random()*400; 
+      g.gain.value = 0.0001; 
+      o.connect(g); 
+      g.connect(masterGain); 
+      o.start(); 
+      g.gain.exponentialRampToValueAtTime(0.15,audioCtx.currentTime+0.02); 
+      g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.25); 
+      o.stop(audioCtx.currentTime+0.26); 
+    }
+function playComboSound(){ 
+    if(!audioCtx) return; 
+    const o=audioCtx.createOscillator(); 
+    const g=audioCtx.createGain(); 
+    o.type='sawtooth'; 
+    o.frequency.value = 1200; 
+    g.gain.value = 0.001; 
+    o.connect(g); 
+    g.connect(masterGain); 
+    o.start(); 
+    g.gain.exponentialRampToValueAtTime(0.12,audioCtx.currentTime+0.03); 
+    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.18); 
+    o.stop(audioCtx.currentTime+0.2); 
+}
+function playGameOverSound(){ 
+    if(!audioCtx) return; 
+    const now=audioCtx.currentTime; 
+    for(let i=0;i<4;i++){ 
+        const o=audioCtx.createOscillator(); 
+        const g=audioCtx.createGain(); 
+        o.type='sine'; 
+        o.frequency.value=600 - i*80; 
+        g.gain.value=0.0001; 
+        o.connect(g); 
+        g.connect(masterGain); 
+        o.start(now+i*0.06); 
+        g.gain.exponentialRampToValueAtTime(0.09,now+i*0.06+0.02); 
+        g.gain.exponentialRampToValueAtTime(0.0001,now+i*0.06+0.3); 
+        o.stop(now+i*0.06+0.36);
+    } 
+}
+
+
+// Simple looping arcade music using oscillators & noise
+let musicNodes = [];
+function startMusic(){ 
+    if(!audioCtx) return; 
+    stopMusic(); 
+    const now=audioCtx.currentTime; 
+    const chord=[440,660,880]; 
+    for(let i=0;i<chord.length;i++){ 
+        const o=audioCtx.createOscillator(); 
+        const g=audioCtx.createGain(); 
+        o.type='triangle'; 
+        o.frequency.value = chord[i]; 
+        g.gain.value = 0.0001; 
+        o.connect(g); 
+        g.connect(musicGain); 
+        o.start(now); 
+        g.gain.linearRampToValueAtTime(0.03, now+0.3); 
+        g.gain.linearRampToValueAtTime(0.006, now+2.2); 
+        musicNodes.push({o,g}); 
+    }
+// rhythmic click
+const tick = audioCtx.createOscillator(); 
+const tg = audioCtx.createGain(); 
+tick.type='square'; 
+tick.frequency.value=880; 
+tg.gain.value=0.0001; 
+tick.connect(tg); 
+tg.connect(musicGain); 
+tick.start(now); 
+tg.gain.linearRampToValueAtTime(0.02, now+0.02); 
+tg.gain.linearRampToValueAtTime(0.0001, now+0.1); 
+musicNodes.push({o:tick,g:tg}); 
+}
+function stopMusic(){ 
+    if(!musicNodes.length) return; 
+    for(const n of musicNodes){ 
+        try{ n.g.gain.cancelScheduledValues(0); 
+            n.g.gain.value=0.0001; n.o.stop(); 
+        }catch(e){} 
+    } 
+    musicNodes=[];
+ }
+
+// --- Game variables ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const timerEl = document.getElementById('timer');
+const overlay = document.getElementById('overlay');
+const countdownBox = document.getElementById('countdownBox');
+const cdText = document.getElementById('cdText');
+const gameOverBox = document.getElementById('gameOverBox');
+const goTitle = document.getElementById('goTitle');
+const finalScore = document.getElementById('finalScore');
+const bestScore = document.getElementById('bestScore');
+const playAgain = document.getElementById('playAgain');
+const gotoHome = document.getElementById('gotoHome');
+const homeBtn = document.getElementById('homeBtn');
+const muteBtn = document.getElementById('muteBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+
+
+let width=0, height=0, dpr=1;
+let fruits=[], particles=[], score=0, startTime=0, gameDuration=20000, running=false, raf=0;
+let spawnInterval=600, lastSpawn=0, difficultyFactor=1; // increases speed
+let comboCount=0, comboTimeout=0; // combo window
+let best = parseInt(localStorage.getItem('fruitblast_best')||'0',10);
+bestScore.textContent = best;
+let isMuted=false;
+let isPaused = false;
+let mode='timed';
+
+// parse params
+const params = new URLSearchParams(window.location.search);
+const timeParam = parseInt(params.get('time'))||20; gameDuration=timeParam*1000;
+mode = params.get('mode')||'timed';
+if(params.get('mute')==='1') isMuted=true;
+if(audioCtx && isMuted){ masterGain.gain.value = 0; }
+
+// resize canvas
+function resize(){ 
+    dpr = window.devicePixelRatio||1; 
+    width = window.innerWidth; 
+    height = window.innerHeight; 
+    canvas.width = Math.floor(width*dpr); 
+    canvas.height = Math.floor(height*dpr); 
+    canvas.style.width = width + 'px'; 
+    canvas.style.height = height + 'px'; 
+    ctx.setTransform(dpr,0,0,dpr,0,0); 
+}
+window.addEventListener('resize', resize);
+
+
+function rand(a,b){ return Math.random()*(b-a)+a }
+
+
+function spawnFruit(){ 
+    const types = FRUIT_TYPES; 
+    const t = types[Math.floor(Math.random()*types.length)]; 
+    const size = rand(46,92); 
+    const x = rand(size, width-size); 
+    const vx = rand(-0.6,0.6); 
+    const vy = rand(60,140)/100 * difficultyFactor; 
+    const rot = rand(-0.6,0.6); 
+    fruits.push({x,y:-size,size,vy,vx,type:t,rot,spawned:Date.now()}); 
+}
+
+
+function createJuice(x,y,color,count=18){ 
+    for(let i=0;i<count;i++){ 
+        const a=rand(0,Math.PI*2); 
+        const speed=rand(1.5,6); 
+        particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,r:rand(2,6),born:Date.now(),life:rand(500,1100),color:color||`hsl(${rand(0,360)},70%,60%)`}); } }
+
+
+function drawBackground(t){ // subtle animated gradient
+    const g = ctx.createLinearGradient(0,0,0,height); const a = Math.sin(t*0.0004)*20; g.addColorStop(0,`hsl(${200+a},28%,8%)`); g.addColorStop(1,`hsl(${150+a},20%,4%)`); ctx.fillStyle = g; ctx.fillRect(0,0,width,height);
+// faint soft circles
+for(let i=0;i<3;i++){ ctx.globalAlpha = 0.02; ctx.beginPath(); ctx.fillStyle = `rgba(255,255,255,0.03)`; const cx = (i+1)*width/4 + Math.sin(t*0.0002+i)*60; ctx.arc(cx,height/4+i*80,Math.max(80,Math.min(width/3, 160)),0,Math.PI*2); ctx.fill(); }
+ctx.globalAlpha = 1;
+}
+
+function draw(){ const now = Date.now(); drawBackground(now);
+// fruits
+for(const f of fruits){ 
+    ctx.save(); 
+    ctx.translate(f.x, f.y); 
+    ctx.rotate(f.rot); 
+    const img = fruitImages[f.type]; 
+    if(img && img.complete){ 
+        const w = f.size; 
+        const h = f.size; 
+        ctx.drawImage(img, -w/2, -h/2, w, h); 
+    } else { // fallback circle
+ctx.fillStyle='#fff'; 
+ctx.beginPath(); 
+ctx.arc(0,0,f.size/2,0,Math.PI*2); 
+ctx.fill(); }
+ctx.restore(); }
+// particles
+for(const p of particles){ 
+    const age = Date.now()-p.born; 
+    const a = Math.max(0,1 - age/p.life); 
+    ctx.globalAlpha = a; ctx.beginPath(); 
+    ctx.fillStyle = p.color; 
+    ctx.arc(p.x,p.y,p.r,0,Math.PI*2); 
+    ctx.fill(); 
+    ctx.globalAlpha = 1; }
+}
+
+function update(dt){ // spawn logic
+if(Date.now() - lastSpawn > spawnInterval){ 
+    spawnFruit(); 
+    lastSpawn = Date.now(); 
+}
+for(let i=fruits.length-1;i>=0;i--){ 
+    const f = fruits[i]; 
+    f.x += f.vx * dt * 0.06; 
+    f.y += f.vy * dt * 0.06; 
+    f.vy += 0.01 * dt * 0.001 * difficultyFactor; 
+    f.rot += 0.001 * dt; // remove when off-screen
+if(f.y - f.size > height + 80){ // missed
+fruits.splice(i,1);
+// in endless mode: penalize or reduce combo
+comboCount = 0;
+}
+}
+for(let i=particles.length-1;i>=0;i--){ 
+    const p = particles[i]; 
+    const age = Date.now() - p.born; 
+    if(age > p.life){ particles.splice(i,1); continue } p.vy += 0.02 * dt * 0.001; p.x += p.vx * dt * 0.06; p.y += p.vy * dt * 0.06; }
+
+
+// combo timeout
+if(comboCount>0 && Date.now() > comboTimeout){ comboCount = 0; }
+}
+
+
+let lastFrame = Date.now();
+function loop(){ 
+    const now = Date.now(); 
+    const dt = now - lastFrame; 
+    lastFrame = now; 
+    update(dt); 
+    draw(); // HUD
+scoreEl.textContent = score; const elapsed = now - startTime; 
+if(mode==='timed'){ 
+    const remain = Math.max(0, Math.ceil((gameDuration - elapsed)/1000)); 
+    timerEl.textContent = remain; 
+    if(elapsed >= gameDuration){ 
+        endGame(); return; 
+    } } else { 
+        timerEl.textContent = '∞'; 
+    }
+// difficulty scaling: every 5s increase difficulty factor a bit
+difficultyFactor = 1 + Math.floor((now - startTime)/5000) * 0.12;
+raf = requestAnimationFrame(loop); }
+
+
+function startCountdown(cb){ 
+    overlay.style.display='flex'; 
+    countdownBox.style.display='block'; 
+    gameOverBox.style.display='none'; 
+    let c=3; 
+    cdText.textContent=c; 
+    const iv = setInterval(()=>{ c--; 
+        if(c>0){ 
+            cdText.style.transform='scale(1.1)'; 
+            cdText.textContent=c; 
+            setTimeout(()=>cdText.style.transform='scale(1)',120);
+        } else { 
+            clearInterval(iv); 
+            countdownBox.style.display='none'; 
+            overlay.style.display='none'; 
+            cb(); } }, 900); }
+
+
+function startGame(){ 
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); 
+    if(!isMuted) startMusic(); score = 0; fruits = []; particles=[]; comboCount=0; comboTimeout=0; lastSpawn=0; difficultyFactor=1; startTime = Date.now(); running = true; resize(); lastFrame = Date.now(); raf = requestAnimationFrame(loop); }
+
+
+function endGame(){ running=false; cancelAnimationFrame(raf); overlay.style.display='flex'; gameOverBox.style.display='block'; finalScore.textContent = score; if(score > best){ best = score; localStorage.setItem('fruitblast_best', String(best)); bestScore.textContent = best; goTitle.textContent = 'New High Score!'; } else { goTitle.textContent = 'Game Over'; }
+playGameOverSound(); stopMusic(); }
+
+
+function hitAt(x,y){ for(let i=fruits.length-1;i>=0;i--){ const f=fruits[i]; const dx = x - f.x; const dy = y - f.y; const dist = Math.sqrt(dx*dx + dy*dy); if(dist < f.size*0.6){ // hit
+const color = '#fff'; createJuice(f.x,f.y,color,22); fruits.splice(i,1);
+// scoring: base 1, combo bonuses
+const now = Date.now(); if(now < comboTimeout){ comboCount++; } else { comboCount = 1; }
+comboTimeout = now + 900; let gained = 1 + Math.floor(comboCount/3); score += gained; // show pop
+showScorePop(x,y, '+'+gained);
+// sound
+if(!isMuted) { if(comboCount>3) playComboSound(); playBlastSound(); }
+return true; } } return false; }
+
+
+function showScorePop(x,y,text){ const el = document.createElement('div'); el.className='scorePop'; el.style.left = (x-12)+'px'; el.style.top = (y-12)+'px'; el.style.fontSize = '20px'; el.textContent = text; document.getElementById('container').appendChild(el);
+// animate
+const start = Date.now(); const duration = 700; function animate(){ const t = Date.now()-start; const p = t/duration; el.style.transform = `translateY(${-p*40}px) scale(${1 + p*0.2})`; el.style.opacity = String(1 - p); if(t < duration) requestAnimationFrame(animate); else el.remove(); } animate(); }
+
+
+// pointer handling
+function getPointer(e){ const touch = e.touches && e.touches[0]; if(touch) return {x:touch.clientX, y:touch.clientY}; return {x:e.clientX, y:e.clientY}; }
+function onPointerDown(e){ if(!running) return; e.preventDefault(); const p = getPointer(e); hitAt(p.x,p.y); }
+function onPointerMove(e){ if(!running) return; const p = getPointer(e); // rate limit swipes
+if(!onPointerMove.last || Date.now()-onPointerMove.last>30){ hitAt(p.x,p.y); onPointerMove.last = Date.now(); } }
+
+
+// attach events
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('touchstart', onPointerDown, {passive:false});
+canvas.addEventListener('touchmove', onPointerMove, {passive:false});
+canvas.addEventListener('mousemove', (e)=>{ if(e.buttons) onPointerMove(e); });
+
+//controls
+homeBtn.addEventListener('click', ()=>{ window.location.href = 'index.html'; });
+gotoHome.addEventListener('click', ()=>{ window.location.href = 'index.html'; });
+playAgain.addEventListener('click', ()=>{ gameOverBox.style.display='none';overlay.style.display='none';cstartCountdown(()=>startGame()); });
+muteBtn.addEventListener('click', ()=>{  isMuted = !isMuted; if(audioCtx){ masterGain.gain.value = isMuted?0:0.9; } muteBtn.textContent = isMuted? 'Unmute':'Mute';});
+pauseBtn.addEventListener('click', ()=>{ if(!running){ //resume
+    startTime += (Date.now() - pauseBtn._pausedAt); running = true; lastFrame = Date.now(); raf = requestAnimationFrame(loop); pauseBtn.textContent='Pause'; if(!isMuted) startMusic(); } else { //pause
+    pauseBtn._pausedAt = Date.now(); running = false; cancelAnimationFrame(raf); pauseBtn.textContent='Resume'; stopMusic(); } });
+
+// initial setup: show countdown then start
+overlay.style.display='flex'; countdownBox.style.display='block'; gameOverBox.style.display='none'; cdText.textContent='3';
+// small delay to ensure images load
+function preloadImages(cb){ const imgs = Object.values(fruitImages); let loaded=0; const total=imgs.length; for(const im of imgs){ if(im.complete) { loaded++; } else { im.onload = ()=>{ loaded++; if(loaded===total) cb(); }; im.onerror = ()=>{ loaded++; if(loaded===total) cb(); }; } } if(loaded===total) cb(); }
+
+preloadImages(()=>{ // start a visible countdown then start
+let c=3; cdText.textContent=c; const iv = setInterval(()=>{ c--; if(c>0) cdText.textContent=c; else { clearInterval(iv); overlay.style.display='none'; countdownBox.style.display='none'; // start game
+// resume audio context on user gesture; note some browsers require gesture
+const tryStart = ()=>{ if(audioCtx && audioCtx.state==='suspended'){ audioCtx.resume().then(()=>{ if(!isMuted) startMusic(); startGame(); }); } else { if(!isMuted) startMusic(); startGame(); } };
+// We need a user gesture to allow audio on some mobiles. If none, start but audio muted until interaction.
+tryStart(); } }, 950); });
+
+// expose some helpers for debugging
+window._fruitblast = { startGame, endGame, fruits, particles };
+resize();
+})();
+</script>
+</body>
+</html>
+
+
+
+
+
